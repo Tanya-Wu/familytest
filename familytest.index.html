@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>原生家庭健康度测试</title>
+    <!-- 1. 引入 Tailwind CSS (样式) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. 引入 React 和 ReactDOM (Staticfile 国内极速镜像) -->
+    <script crossorigin src="https://cdn.staticfile.net/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.staticfile.net/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- 3. 引入 Babel (Staticfile 国内极速镜像 - 升级到 7.x 版本以支持新语法) -->
+    <script src="https://cdn.staticfile.net/babel-standalone/7.23.5/babel.min.js"></script>
+    
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+        /* 防止手机双击缩放 */
+        body { 
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif; 
+            touch-action: manipulation;
+        }
+        /* 加载时的防白屏样式 */
+        #root:empty::before {
+            content: '正在加载...';
+            display: block;
+            text-align: center;
+            padding-top: 50px;
+            color: #666;
+        }
+    </style>
+</head>
+<body class="bg-[#FDFCF8]">
+    <div id="root"></div>
+
+    <!-- 添加错误捕获，如果白屏会显示原因 -->
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            var root = document.getElementById('root');
+            root.innerHTML = '<div style="padding:20px;color:red;"><h3>程序运行出错</h3><p>' + message + '</p></div>';
+        };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- 全局常量数据 ---
+        const OPTIONS = [
+            { label: '从不', score: 1 },
+            { label: '很少', score: 2 },
+            { label: '有时', score: 3 },
+            { label: '经常', score: 4 },
+            { label: '总是', score: 5 },
+        ];
+
+        const QUESTIONS = [
+            "父母会强行替我做决定（如穿衣、选专业、交友），不顾我的意愿。",
+            "如果我不按父母的要求做，他们会表现出极度的失望或愤怒。",
+            "我感觉在父母面前没有隐私，他们会翻看我的日记、手机或房间。",
+            "父母总是试图通过金钱来控制我的生活。",
+            "在做重大决定时，我会因为害怕父母反对而感到极度焦虑。",
+            "父母认为我永远长不大，无法照顾好自己。",
+            "即便我成年了，父母还是会干涉我的作息或生活习惯。",
+            "我很难在父母面前坚定地说“不”。",
+            "父母会通过“为了你好”的名义强迫我做我不喜欢的事。",
+            "我觉得自己像父母的附属品，而不是一个独立的个体。",
+            
+            "当我感到难过时，父母通常会忽视我的感受或让我“别矫情”。",
+            "我很少能从父母那里得到口头的赞扬或肯定。",
+            "在家里，表达负面情绪（如愤怒、悲伤）是不被允许的。",
+            "我觉得父母并不真正了解我是个什么样的人。",
+            "当我取得成就时，父母的反应很平淡，或者马上提出更高的要求。",
+            "我不记得父母曾温柔地拥抱过我或安抚过我。",
+            "在这个家里，我感觉自己是孤单的，即使父母就在身边。",
+            "父母更关心我的成绩/工作/收入，而不是我开不开心。",
+            "当我遇到困难求助时，得到的往往是责备而不是支持。",
+            "我觉得必须通过表现“完美”才能换取父母的关注。",
+
+            "父母经常用羞辱性或讽刺的语言评价我。",
+            "只要家里出了问题，我往往是那个被怪罪的人。",
+            "父母会拿我和“别人家的孩子”比较，以此来贬低我。",
+            "即使是小错误，也会招致父母严厉的批评或体罚（包括冷暴力）。",
+            "父母会翻旧账，反复提及我过去的错误。",
+            "在争吵中，父母会对我说出很难听的话，甚至进行人身攻击。",
+            "父母的某些评价让我觉得自己一无是处。",
+            "我常常因为害怕被骂而对父母撒谎。",
+            "父母从不为他们的错误行为向我道歉。",
+            "哪怕是开玩笑，父母的话也经常让我感到受伤。",
+
+            "父母会向我倾诉他们婚姻中的不幸，让我感到负担沉重。",
+            "我觉得自己不仅是孩子，还要充当父母的“父母”来照顾他们的情绪。",
+            "父母经常说“我这么辛苦都是为了你”，让我感到深深的内疚。",
+            "如果我过得开心，我会莫名其妙地对父母感到愧疚。",
+            "父母生病或不开心时，如果我不在身边，我会觉得自己是个罪人。",
+            "父母之间发生冲突时，会拉我站队或让我传话。",
+            "父母会用生病、装可怜等方式来迫使我妥协。",
+            "我感觉自己需要为父母的幸福负责。",
+            "父母的情绪极其不稳定，我必须小心翼翼地看脸色行事。",
+            "我觉得我对家庭的付出远远超过了我得到的支持。",
+
+            "父母会不经允许随意进入我的房间或使用我的物品。",
+            "父母会对我的伴侣或朋友评头论足，甚至干涉我们的关系。",
+            "我感觉我们家缺乏界限感，大家的事情都混在一起。",
+            "父母期望我把所有空闲时间都花在陪伴他们上。",
+            "如果我想搬出去住或独立生活，父母会极力阻挠。",
+            "父母会私下联系我的朋友、老师或同事来打听我的情况。",
+            "我很难在这个家里保有自己的小秘密。",
+            "父母认为子女是私有财产，不存在所谓的“个人空间”。",
+            "当我们意见不一致时，父母会把它上升到“不孝”的高度。",
+            "即使我成家了，父母也觉得他们有权干涉我的小家庭。",
+
+            "一想到回家，我就会感到胸口发闷或压力很大。",
+            "在父母面前，我很难做真实的自己。",
+            "我经常怀疑自己是否值得被爱。",
+            "我发现自己在亲密关系中重复父母的相处模式，这让我很痛苦。",
+            "我对权威人物（老板、老师）通常感到恐惧或想要讨好。",
+            "我很难信任别人，总觉得会被伤害或控制。",
+            "我有很强的自我批判倾向，总觉得自己不够好。",
+            "在这个家里，我经常感到紧张，无法彻底放松。",
+            "想到未来要像父母那样生活，我会感到绝望。",
+            "如果有来生，我不希望再生在这样的家庭里。"
+        ];
+
+        // --- 图标组件 ---
+        const IconHeart = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>;
+        const IconArrowRight = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>;
+        const IconRefresh = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>;
+        const IconBook = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>;
+        const IconShield = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>;
+        const IconSun = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
+        const IconHome = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+        const IconAward = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>;
+
+        const IntroView = ({ onStart }) => (
+            <div className="flex flex-col items-center justify-center min-h-[80vh] px-6 text-center space-y-8 animate-fade-in">
+                <div className="p-4 bg-amber-100 rounded-full mb-4">
+                    <IconHome className="w-16 h-16 text-amber-600" />
+                </div>
+                <h1 className="text-4xl font-bold text-stone-800 tracking-tight">原生家庭健康度测试</h1>
+                <p className="text-lg text-stone-600 max-w-2xl leading-relaxed">
+                    我们要了解自己，往往要先了解我们的来处。<br/>
+                    这份包含 <span className="font-bold text-amber-700">60道题目</span> 的深度测评，将帮助你客观看待你与家庭的关系。<br/>
+                    这不是为了责备父母，而是为了让你看清现状，从而获得疗愈与自由。
+                </p>
+                
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-stone-100 max-w-lg w-full text-left space-y-4">
+                    <div className="flex items-start space-x-3">
+                        <IconShield className="w-5 h-5 text-stone-400 mt-1 flex-shrink-0" />
+                        <span className="text-stone-600 text-sm">测试结果仅供参考，不作为医学诊断依据。</span>
+                    </div>
+                    <div className="flex items-start space-x-3">
+                        <IconRefresh className="w-5 h-5 text-stone-400 mt-1 flex-shrink-0" />
+                        <span className="text-stone-600 text-sm">请根据你的“第一直觉”回答，无需过多思考。</span>
+                    </div>
+                </div>
+
+                <button 
+                    onClick={onStart}
+                    className="group relative inline-flex items-center justify-center px-8 py-4 text-lg font-medium text-white transition-all duration-200 bg-stone-800 rounded-full hover:bg-stone-700 shadow-lg hover:shadow-xl hover:-translate-y-1"
+                >
+                    开始探索
+                    <span className="ml-2 group-hover:translate-x-1 transition-transform"><IconArrowRight className="w-5 h-5" /></span>
+                </button>
+            </div>
+        );
+
+        const TestView = ({ current, total, question, onOptionSelect }) => (
+            <div className="max-w-2xl mx-auto px-4 py-8 min-h-[80vh] flex flex-col justify-center animate-fade-in">
+                <div className="mb-8">
+                    <div className="flex justify-between text-sm font-medium text-stone-500 mb-2">
+                        <span>进度</span>
+                        <span>{current + 1} / {total}</span>
+                    </div>
+                    <div className="w-full bg-stone-200 rounded-full h-2.5">
+                        <div 
+                            className="bg-stone-800 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                            style={{ width: `${((current + 1) / total) * 100}%` }}
+                        ></div>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-xl border border-stone-100 p-8 md:p-12 mb-8 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-200 to-stone-300"></div>
+                    <h2 className="text-2xl md:text-3xl font-serif font-medium text-stone-800 leading-snug mb-8">
+                        {question}
+                    </h2>
+
+                    <div className="space-y-3">
+                        {OPTIONS.map((opt) => (
+                            <button
+                                key={opt.label}
+                                onClick={() => onOptionSelect(opt.score)}
+                                className="w-full text-left px-6 py-4 rounded-xl border border-stone-200 hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 flex justify-between items-center group active:scale-[0.98]"
+                            >
+                                <span className="text-lg text-stone-700 group-hover:text-stone-900">{opt.label}</span>
+                                <div className="w-4 h-4 rounded-full border-2 border-stone-300 group-hover:border-amber-500 group-hover:bg-amber-500 transition-colors"></div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+
+        const ResultView = ({ scores, onRetry }) => {
+            const calculateResult = () => {
+                const totalScore = scores.reduce((a, b) => a + b, 0);
+                
+                let resultLevel = {};
+
+                if (totalScore <= 120) {
+                    resultLevel = {
+                        title: "温暖的避风港",
+                        type: "health",
+                        color: "text-emerald-600",
+                        bgColor: "bg-emerald-50",
+                        borderColor: "border-emerald-200",
+                        desc: "你的原生家庭健康度很高。在这个家庭中，成员之间既有紧密的连接，又有清晰的边界。你被允许做你自己，你的感受被看见、被尊重。这为你的人生打下了坚实的安全感底色。",
+                        advice: [
+                            "保持感恩：由于你拥有宝贵的心理资源，你可以更好地去爱自己和他人。",
+                            "传递爱：如果你有了自己的孩子或伴侣，请将这种健康的互动模式延续下去。",
+                            "自我实现：既然没有原生家庭的沉重包袱，你可以更自由地去追求自己的梦想。"
+                        ]
+                    };
+                } else if (totalScore <= 180) {
+                    resultLevel = {
+                        title: "略有瑕疵的普通家庭",
+                        type: "average",
+                        color: "text-blue-600",
+                        bgColor: "bg-blue-50",
+                        borderColor: "border-blue-200",
+                        desc: "你的原生家庭大体是正常的，但也存在一些由于代际差异、沟通不畅带来的小摩擦或忽视。父母可能爱你，但未必总是懂得如何正确地爱你。这可能会让你偶尔感到委屈或困惑。",
+                        advice: [
+                            "建立沟通：尝试温和地向父母表达你的真实需求，而不是期待他们自己猜到。",
+                            "课题分离：分清哪些是父母的情绪，哪些是你的责任，不要过度承担。",
+                            "自我关怀：在感到被忽视时，学会自己做自己的“好父母”，安抚自己。"
+                        ]
+                    };
+                } else if (totalScore <= 240) {
+                    resultLevel = {
+                        title: "令人窒息的纠葛",
+                        type: "unhealthy",
+                        color: "text-orange-600",
+                        bgColor: "bg-orange-50",
+                        borderColor: "border-orange-200",
+                        desc: "你的原生家庭健康度较低，存在明显的控制、忽视或情感勒索问题。在这个环境中长大，你可能经常感到压力、内疚或自我怀疑。你可能花费了大量精力去应对家庭的内耗。",
+                        advice: [
+                            "设立边界：这很难，但必须开始对侵犯你空间的行为说“不”。",
+                            "物理隔离：如果条件允许，适当的物理距离（如搬出去住）有助于心理独立。",
+                            "寻求支持：寻找可信赖的朋友或心理咨询师，建立家庭以外的支持系统。",
+                            "停止期待：承认父母可能永远无法变成你理想中的样子，放弃改变他们的幻想，专注于改变自己。"
+                        ]
+                    };
+                } else {
+                    resultLevel = {
+                        title: "急需疗愈的创伤地带",
+                        type: "toxic",
+                        color: "text-rose-700",
+                        bgColor: "bg-rose-50",
+                        borderColor: "border-rose-200",
+                        desc: "你的原生家庭环境可能存在严重的毒性，包括但不限于极度控制、言语暴力或严重的情感忽视。这种环境可能给你的自尊和安全感造成了较深的创伤。请记住，这绝不是你的错。",
+                        advice: [
+                            "保护安全：如果家庭环境让你感到极度痛苦甚至危险，请优先保护自己的身心安全，必要时切断联系。",
+                            "专业干预：这种深层的创伤很难独自消化，强烈建议寻求专业心理咨询师的帮助。",
+                            "重塑自我：你需要花费时间去“哀悼”那个没有被好好爱过的童年，然后一砖一瓦地重建自我认知。",
+                            "打破轮回：觉察这些模式，发誓不让这种创伤代际传递给下一代。"
+                        ]
+                    };
+                }
+
+                return { totalScore, ...resultLevel };
+            };
+
+            const result = calculateResult();
+
+            return (
+                <div className="max-w-3xl mx-auto px-4 py-12 space-y-10 animate-fade-in">
+                    <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
+                        <div className={`${result.bgColor} p-8 text-center border-b ${result.borderColor}`}>
+                            <h2 className="text-stone-500 font-medium mb-2 uppercase tracking-wide text-sm">测试结果</h2>
+                            <div className={`text-4xl md:text-5xl font-bold mb-4 ${result.color}`}>
+                                {result.title}
+                            </div>
+                            <p className="text-stone-600 max-w-xl mx-auto leading-relaxed">
+                                {result.desc}
+                            </p>
+                        </div>
+                        
+                        <div className="p-8 bg-white">
+                            <div className="flex items-center gap-2 mb-6">
+                                <IconBook className="w-5 h-5 text-stone-400" />
+                                <h3 className="text-xl font-bold text-stone-800">如何改变现状？</h3>
+                            </div>
+                            <ul className="space-y-4">
+                                {result.advice.map((item, index) => (
+                                    <li key={index} className="flex items-start gap-3 bg-stone-50 p-4 rounded-xl">
+                                        <span className="flex-shrink-0 w-6 h-6 bg-stone-200 text-stone-600 rounded-full flex items-center justify-center text-sm font-bold mt-0.5">{index + 1}</span>
+                                        <span className="text-stone-700 leading-relaxed">{item}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="relative bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 md:p-12 shadow-inner border border-amber-100">
+                        <IconSun className="absolute top-6 right-6 w-8 h-8 text-amber-300 opacity-50" />
+                        <h3 className="text-2xl font-serif text-amber-900 mb-6 flex items-center gap-2">
+                            <IconHeart className="w-6 h-6 text-amber-600 fill-current" />
+                            <span>给此刻的你</span>
+                        </h3>
+                        
+                        <div className="prose prose-stone text-stone-700 leading-loose text-lg font-light italic">
+                            <p>亲爱的，辛苦了。</p>
+                            <p>无论刚才的分数是多少，请记住：<span className="font-semibold text-amber-800 bg-amber-100 px-1">那不是你的错</span>。原生家庭是我们出生的剧本，但绝不是我们人生的终章。你已经长大了，你拥有了重新养育自己的力量。</p>
+                            <p>那些曾经没有被满足的需求，现在你可以一点点给自己；那些曾经被忽视的情绪，现在你可以温柔地抱持它们。你不再是那个无助等待父母改变的孩子，你是自己命运的掌舵者。</p>
+                            <p>愿你有力量划清界限，也有勇气拥抱爱。你的存在本身，就是一份珍贵的礼物。</p>
+                        </div>
+                    </div>
+
+                    <div className="text-center pt-8">
+                        <button 
+                            onClick={onRetry}
+                            className="inline-flex items-center text-stone-500 hover:text-stone-800 transition-colors gap-2"
+                        >
+                            <IconRefresh className="w-4 h-4" />
+                            <span>重新测试</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        const FamilyHealthTest = () => {
+            const [gameState, setGameState] = useState('intro'); 
+            const [currentQuestion, setCurrentQuestion] = useState(0);
+            const [scores, setScores] = useState([]);
+            const topRef = useRef(null);
+
+            const scrollToTop = () => {
+                if (topRef.current) {
+                    topRef.current.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            };
+
+            const handleStart = () => {
+                setScores([]);
+                setCurrentQuestion(0);
+                setGameState('test');
+                scrollToTop();
+            };
+
+            const handleOptionSelect = (score) => {
+                const newScores = [...scores, score];
+                setScores(newScores);
+                
+                if (currentQuestion < QUESTIONS.length - 1) {
+                    setCurrentQuestion(currentQuestion + 1);
+                    setTimeout(scrollToTop, 100);
+                } else {
+                    setGameState('result');
+                    scrollToTop();
+                }
+            };
+
+            const handleRetry = () => {
+                 setScores([]);
+                 setCurrentQuestion(0);
+                 setGameState('intro');
+                 scrollToTop();
+            };
+
+            return (
+                <div ref={topRef}>
+                    {gameState === 'intro' && <IntroView onStart={handleStart} />}
+                    {gameState === 'test' && (
+                        <TestView 
+                            current={currentQuestion}
+                            total={QUESTIONS.length}
+                            question={QUESTIONS[currentQuestion]}
+                            onOptionSelect={handleOptionSelect}
+                        />
+                    )}
+                    {gameState === 'result' && <ResultView scores={scores} onRetry={handleRetry} />}
+                </div>
+            );
+        };
+
+        const App = () => {
+            return (
+                <div className="min-h-screen bg-[#FDFCF8] text-stone-800 font-sans selection:bg-amber-100 selection:text-amber-900 relative">
+                    {/* --- 水印/防盗标识 --- */}
+                    <div className="fixed top-24 -right-1 z-50 pointer-events-none select-none opacity-90">
+                         <div className="bg-amber-100/90 text-amber-900 text-xs font-bold px-3 py-1.5 rounded-l-lg shadow-sm backdrop-blur-sm border-y border-l border-amber-200 tracking-wide">
+                            小红书-心灵栖息树原创 侵权必究
+                         </div>
+                    </div>
+                    
+                    <header className="py-6 px-6 border-b border-stone-100 bg-white/50 backdrop-blur-sm sticky top-0 z-10">
+                        <div className="max-w-5xl mx-auto flex justify-between items-center">
+                            <div className="flex items-center gap-2 font-serif font-bold text-xl text-stone-800">
+                                <IconAward className="w-6 h-6 text-stone-800" />
+                                <span>InnerHome</span>
+                            </div>
+                        </div>
+                    </header>
+                    <main>
+                       <FamilyHealthTest />
+                    </main>
+                    <footer className="py-8 text-center text-stone-400 text-sm">
+                        <p>© 2025 Native Family Health Assessment. For Healing & Growth.</p>
+                    </footer>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
