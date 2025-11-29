@@ -13,6 +13,9 @@
     
     <!-- 3. 引入 Babel (Staticfile 国内极速镜像 - 升级到 7.x 版本以支持新语法) -->
     <script src="https://cdn.staticfile.net/babel-standalone/7.23.5/babel.min.js"></script>
+
+    <!-- 4. 引入 Chart.js (用于绘制雷达图) -->
+    <script src="https://cdn.staticfile.net/Chart.js/3.9.1/chart.min.js"></script>
     
     <style>
         @keyframes fadeIn {
@@ -60,7 +63,58 @@
             { label: '总是', score: 5 },
         ];
 
+        // 题目维度分组信息
+        const DIMENSIONS = [
+            { name: '控制与自主', range: [0, 10], key: 'control' },
+            { name: '情感忽视', range: [10, 20], key: 'neglect' },
+            { name: '语言暴力', range: [20, 30], key: 'abuse' },
+            { name: '角色错位', range: [30, 40], key: 'role' },
+            { name: '边界缠结', range: [40, 50], key: 'boundary' },
+            { name: '缺乏安全感', range: [50, 60], key: 'security' },
+        ];
+
+        // 各维度成因分析文案 (包含具体成因分析)
+        const DIMENSION_ANALYSIS = {
+            control: {
+                title: "被剥夺的自主权",
+                scoreText: "控制维度",
+                cause: "父母可能具有较强的控制欲，将孩子视为自己的延伸而非独立个体。他们可能出于焦虑或完美主义，过度干涉你的选择。",
+                effect: "这导致你可能习惯于顺从或通过叛逆来确立自我，做决定时容易感到极度焦虑，缺乏对自我能力的信任。"
+            },
+            neglect: {
+                title: "隐形的情感需求",
+                scoreText: "忽视维度",
+                cause: "父母可能在情感上是缺席的、冷漠的，或者他们自己就不懂得如何处理情绪。你的情感需求长期被忽略或否定。",
+                effect: "这让你建立了“我的感受不重要”或“我不值得被爱”的核心信念，习惯隐藏真实情绪，难以在关系中表达需求。"
+            },
+            abuse: {
+                title: "语言的隐形伤痕",
+                scoreText: "指责维度",
+                cause: "家庭中可能充满了批评、贬低或嘲讽。父母可能将语言作为情绪宣泄的工具，或者信奉“打击式教育”。",
+                effect: "这些声音内化为了你严苛的“内在批评家”，导致你低自尊、容易内疚，对他人的评价极度敏感。"
+            },
+            role: {
+                title: "被迫长大的孩子",
+                scoreText: "角色维度",
+                cause: "父母功能缺失，可能由于婚姻不幸、身心疾病或幼稚，导致孩子被迫反过来照顾父母的情绪或承担家庭责任。",
+                effect: "你牺牲了自己的童年，习惯于为他人的情绪负责（“拯救者情节”），在亲密关系中容易过度付出而忽略自己。"
+            },
+            boundary: {
+                title: "模糊的自我边界",
+                scoreText: "边界维度",
+                cause: "家庭成员之间缺乏界限，这是一种共生绞缠的关系模式。父母可能不仅不尊重隐私，还视这种“亲密无间”为爱的表现。",
+                effect: "你很难分清“我的事”和“别人的事”，容易被他人的情绪吞没，或者在试图建立独立空间时感到深深的内疚。"
+            },
+            security: {
+                title: "根深蒂固的不安",
+                scoreText: "安全维度",
+                cause: "这是上述各种创伤长期累积的结果，或者是家庭环境长期不稳定（如争吵、暴力、搬家）造成的。",
+                effect: "你的神经系统始终处于“战或逃”的警觉状态，难以彻底放松，对世界抱有戒备，很难建立深层的信任关系。"
+            }
+        };
+
         const QUESTIONS = [
+            // 1-10: 控制与自主权
             "父母会强行替我做决定（如穿衣、选专业、交友），不顾我的意愿。",
             "如果我不按父母的要求做，他们会表现出极度的失望或愤怒。",
             "我感觉在父母面前没有隐私，他们会翻看我的日记、手机或房间。",
@@ -72,6 +126,7 @@
             "父母会通过“为了你好”的名义强迫我做我不喜欢的事。",
             "我觉得自己像父母的附属品，而不是一个独立的个体。",
             
+            // 11-20: 情感忽视与回应
             "当我感到难过时，父母通常会忽视我的感受或让我“别矫情”。",
             "我很少能从父母那里得到口头的赞扬或肯定。",
             "在家里，表达负面情绪（如愤怒、悲伤）是不被允许的。",
@@ -83,6 +138,7 @@
             "当我遇到困难求助时，得到的往往是责备而不是支持。",
             "我觉得必须通过表现“完美”才能换取父母的关注。",
 
+            // 21-30: 语言暴力与指责
             "父母经常用羞辱性或讽刺的语言评价我。",
             "只要家里出了问题，我往往是那个被怪罪的人。",
             "父母会拿我和“别人家的孩子”比较，以此来贬低我。",
@@ -94,6 +150,7 @@
             "父母从不为他们的错误行为向我道歉。",
             "哪怕是开玩笑，父母的话也经常让我感到受伤。",
 
+            // 31-40: 角色错位与情感勒索
             "父母会向我倾诉他们婚姻中的不幸，让我感到负担沉重。",
             "我觉得自己不仅是孩子，还要充当父母的“父母”来照顾他们的情绪。",
             "父母经常说“我这么辛苦都是为了你”，让我感到深深的内疚。",
@@ -105,6 +162,7 @@
             "父母的情绪极其不稳定，我必须小心翼翼地看脸色行事。",
             "我觉得我对家庭的付出远远超过了我得到的支持。",
 
+            // 41-50: 边界感与缠结
             "父母会不经允许随意进入我的房间或使用我的物品。",
             "父母会对我的伴侣或朋友评头论足，甚至干涉我们的关系。",
             "我感觉我们家缺乏界限感，大家的事情都混在一起。",
@@ -116,6 +174,7 @@
             "当我们意见不一致时，父母会把它上升到“不孝”的高度。",
             "即使我成家了，父母也觉得他们有权干涉我的小家庭。",
 
+            // 51-60: 总体安全感与自我价值
             "一想到回家，我就会感到胸口发闷或压力很大。",
             "在父母面前，我很难做真实的自己。",
             "我经常怀疑自己是否值得被爱。",
@@ -137,6 +196,9 @@
         const IconSun = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>;
         const IconHome = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
         const IconAward = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>;
+        const IconActivity = ({className}) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>;
+
+        // --- 子组件 ---
 
         const IntroView = ({ onStart }) => (
             <div className="flex flex-col items-center justify-center min-h-[80vh] px-6 text-center space-y-8 animate-fade-in">
@@ -208,10 +270,99 @@
             </div>
         );
 
+        // --- 雷达图组件 ---
+        const RadarChart = ({ dimensionScores }) => {
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            useEffect(() => {
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+
+                const ctx = chartRef.current.getContext('2d');
+                const data = {
+                    labels: DIMENSIONS.map(d => d.name),
+                    datasets: [{
+                        label: '我的伤痛维度',
+                        data: DIMENSIONS.map(d => dimensionScores[d.key]),
+                        fill: true,
+                        backgroundColor: 'rgba(251, 146, 60, 0.2)', // orange-400
+                        borderColor: 'rgba(251, 146, 60, 1)', // orange-400
+                        pointBackgroundColor: 'rgba(251, 146, 60, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(251, 146, 60, 1)',
+                        borderWidth: 2,
+                        pointRadius: 4,
+                    }]
+                };
+
+                const config = {
+                    type: 'radar',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            r: {
+                                angleLines: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.1)'
+                                },
+                                pointLabels: {
+                                    font: {
+                                        size: 12,
+                                        family: '"PingFang SC", "Microsoft YaHei", sans-serif',
+                                    },
+                                    color: '#57534e'
+                                },
+                                ticks: {
+                                    beginAtZero: true,
+                                    max: 50,
+                                    stepSize: 10,
+                                    display: false 
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                };
+
+                chartInstance.current = new Chart(ctx, config);
+
+                return () => {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                    }
+                };
+            }, [dimensionScores]);
+
+            return (
+                <div className="w-full h-80 md:h-96 bg-white p-4 rounded-2xl">
+                    <canvas ref={chartRef} />
+                </div>
+            );
+        };
+
+
         const ResultView = ({ scores, onRetry }) => {
             const calculateResult = () => {
                 const totalScore = scores.reduce((a, b) => a + b, 0);
                 
+                // 计算各维度得分
+                const dimensionScores = {};
+                DIMENSIONS.forEach(dim => {
+                    const dimensionTotal = scores.slice(dim.range[0], dim.range[1]).reduce((a, b) => a + b, 0);
+                    dimensionScores[dim.key] = dimensionTotal;
+                });
+
                 let resultLevel = {};
 
                 if (totalScore <= 120) {
@@ -274,17 +425,39 @@
                     };
                 }
 
-                return { totalScore, ...resultLevel };
+                return { totalScore, dimensionScores, ...resultLevel };
             };
 
             const result = calculateResult();
+            
+            // 计算健康分：最高分300（最痛），最低分60（最健康）
+            // 范围240分。公式：100 - (当前分-60)/240 * 100
+            const healthScore = Math.round(100 - ((result.totalScore - 60) / 240 * 100));
+            
+            // 筛选Top3维度
+            const topDimensions = [...DIMENSIONS]
+                .sort((a, b) => result.dimensionScores[b.key] - result.dimensionScores[a.key])
+                .slice(0, 3);
 
             return (
                 <div className="max-w-3xl mx-auto px-4 py-12 space-y-10 animate-fade-in">
+                    {/* 结果总览卡片 */}
                     <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
                         <div className={`${result.bgColor} p-8 text-center border-b ${result.borderColor}`}>
-                            <h2 className="text-stone-500 font-medium mb-2 uppercase tracking-wide text-sm">测试结果</h2>
-                            <div className={`text-4xl md:text-5xl font-bold mb-4 ${result.color}`}>
+                            <h2 className="text-stone-500 font-medium mb-4 uppercase tracking-wide text-sm">测试结果</h2>
+                            
+                            {/* 新增：健康度分数展示 */}
+                            <div className="mb-6 flex flex-col items-center">
+                                <div className="relative inline-flex items-center justify-center">
+                                    <span className={`text-6xl md:text-7xl font-bold ${result.color}`}>
+                                        {healthScore}
+                                    </span>
+                                    <span className="text-2xl text-stone-400 ml-1 font-medium">/ 100</span>
+                                </div>
+                                <div className="text-stone-500 font-medium mt-1">家庭健康指数</div>
+                            </div>
+
+                            <div className={`text-3xl md:text-4xl font-bold mb-4 ${result.color}`}>
                                 {result.title}
                             </div>
                             <p className="text-stone-600 max-w-xl mx-auto leading-relaxed">
@@ -292,6 +465,45 @@
                             </p>
                         </div>
                         
+                        {/* 雷达图区域 */}
+                        <div className="p-6 md:p-8 bg-stone-50 border-b border-stone-100">
+                            <div className="flex items-center gap-2 mb-6 justify-center">
+                                <IconActivity className="w-5 h-5 text-amber-500" />
+                                <h3 className="text-xl font-bold text-stone-800">我的伤痛维度雷达图</h3>
+                            </div>
+                            <RadarChart dimensionScores={result.dimensionScores} />
+                            <p className="text-center text-sm text-stone-500 mt-4">
+                                * 维度得分越高，代表该方面的创伤或问题越显著。
+                            </p>
+                        </div>
+
+                        {/* 伤痛成因分析区域 - 永远显示 Top 3 */}
+                        <div className="p-8 bg-white border-b border-stone-100">
+                            <div className="flex items-center gap-2 mb-6">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-stone-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                <h3 className="text-xl font-bold text-stone-800">深度成因分析 (Top 3)</h3>
+                            </div>
+                            <div className="space-y-6">
+                                {topDimensions.map(dim => (
+                                    <div key={dim.key} className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+                                        <h4 className="font-bold text-orange-800 mb-3 flex justify-between items-center">
+                                            <span>{DIMENSION_ANALYSIS[dim.key].title}</span>
+                                            <span className="text-xs font-normal text-orange-600 bg-orange-100 px-2 py-1 rounded-full">
+                                                {DIMENSION_ANALYSIS[dim.key].scoreText}较高
+                                            </span>
+                                        </h4>
+                                        <div className="space-y-2 text-stone-700 text-sm md:text-base">
+                                            <p><span className="font-bold text-orange-700/70">成因：</span>{DIMENSION_ANALYSIS[dim.key].cause}</p>
+                                            <p><span className="font-bold text-orange-700/70">影响：</span>{DIMENSION_ANALYSIS[dim.key].effect}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* 行动建议区域 */}
                         <div className="p-8 bg-white">
                             <div className="flex items-center gap-2 mb-6">
                                 <IconBook className="w-5 h-5 text-stone-400" />
@@ -308,6 +520,7 @@
                         </div>
                     </div>
 
+                    {/* 治愈信笺区域 */}
                     <div className="relative bg-gradient-to-br from-amber-50 to-orange-50 rounded-3xl p-8 md:p-12 shadow-inner border border-amber-100">
                         <IconSun className="absolute top-6 right-6 w-8 h-8 text-amber-300 opacity-50" />
                         <h3 className="text-2xl font-serif text-amber-900 mb-6 flex items-center gap-2">
